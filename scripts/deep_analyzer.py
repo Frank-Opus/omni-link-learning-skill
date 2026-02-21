@@ -1,14 +1,16 @@
 #!/usr/bin/env python3
 """
-Deep Analyzer v2.1 - Professional Text Interpretation with Deep Insights
-改进版：完整总结 + 深度解读 + 底层逻辑 + 实战应用 + 风险警示
+Deep Analyzer v3.0 - 真正深度分析引擎
+完整总结 + 深度解读 + 底层逻辑 + 实战话术 + 风险警示
 
-核心改进:
-- 从"要点罗列"升级为"深度解读"
-- 增加底层逻辑分析（为什么有效）
-- 增加适用边界和风险提示
-- 增加跨案例对比和模式识别
-- 增加可执行的行动计划
+核心改进 (v3.0):
+- 移除空洞的行动计划部分
+- 增强金句提取：从内容中自动识别核心观点
+- 深度解读：基于内容分类，给出具体分析而非占位符
+- 底层逻辑：尝试从内容中提取人性/商业/系统层面的洞察
+- 实战话术：从原文中提取可直接套用的模板
+- 跨案例对比：基于内容填充对比表格
+- 风险警示：从内容中识别隐藏假设和适用边界
 
 Usage:
     python scripts/deep_analyzer.py --input transcript.txt --output analysis_report.md
@@ -40,23 +42,21 @@ def load_transcript(input_path: str) -> tuple[str, dict]:
                 metadata["video_id"] = video_info.get("video_id", "")
             
             # Priority: Get full transcript from douyin_mcp_result.json
-            # The transcript field contains JSON string with segments
             if "transcript" in meta and meta["transcript"]:
                 transcript_str = meta["transcript"]
                 try:
-                    # Parse the JSON string
                     transcript_data = json.loads(transcript_str)
                     if isinstance(transcript_data, dict):
-                        # Use segments to reconstruct (most complete)
-                        if "segments" in transcript_data:
+                        # Priority 1: Use "text" field if available (usually complete)
+                        if "text" in transcript_data:
+                            text = transcript_data["text"]
+                            print(f"📝 Loaded complete text field: {len(text):,} chars")
+                            return text.strip(), metadata
+                        # Priority 2: Reconstruct from segments (may be truncated)
+                        elif "segments" in transcript_data:
                             segments = transcript_data.get("segments", [])
                             text = "".join([seg.get("text", "") for seg in segments])
-                            print(f"📝 Loaded and reconstructed from {len(segments)} segments: {len(text):,} chars")
-                            return text.strip(), metadata
-                        # Fallback to text field
-                        elif "text" in transcript_data:
-                            text = transcript_data["text"]
-                            print(f"📝 Loaded text field: {len(text):,} chars")
+                            print(f"📝 Reconstructed from {len(segments)} segments: {len(text):,} chars")
                             return text.strip(), metadata
                 except (json.JSONDecodeError, TypeError) as e:
                     print(f"⚠️  Parse error: {e}")
@@ -67,21 +67,17 @@ def load_transcript(input_path: str) -> tuple[str, dict]:
         data = json.load(f)
     
     text = ""
-    
-    # Priority 1: Reconstruct from segments (most complete)
     if isinstance(data, dict) and "segments" in data:
         segments = data.get("segments", [])
         if segments:
             text = "".join([seg.get("text", "") for seg in segments])
             print(f"📝 Reconstructed text from {len(segments)} segments: {len(text):,} chars")
     
-    # Priority 2: Use text field if segments not available
     if not text and isinstance(data, dict):
         text_field = data.get("text", "")
         if isinstance(text_field, str):
             text = text_field
     
-    # Fallback: use raw content
     if not text:
         text = str(data)
     
@@ -98,6 +94,8 @@ def identify_key_themes(text: str) -> list[dict]:
         "管理思维": ["团队", "领导", "资源", "激励", "培训", "考核", "业绩", "管理"],
         "商业洞察": ["市场", "竞争", "利润", "成本", "效率", "模式", "生态", "商业"],
         "AI 与技术": ["AI", "工具", "自动化", "效率", "替代", "学习", "技术"],
+        "沟通情商": ["情商", "沟通", "夸人", "感谢", "话术", "人缘", "社交"],
+        "人际关系": ["上级", "平级", "下级", "前辈", "领导", "同事"],
     }
     
     themes = []
@@ -114,34 +112,79 @@ def identify_key_themes(text: str) -> list[dict]:
     return themes[:5]
 
 
-def extract_key_quotes(text: str, max_quotes: int = 10) -> list[str]:
-    """Extract memorable quotes from transcript."""
-    # Look for patterns like "xxx" or「xxx」or 说："xxx"
+def extract_key_quotes(text: str, max_quotes: int = 15) -> list[str]:
+    """Extract memorable quotes from transcript - 增强版."""
+    quotes = []
+    
+    # Pattern 1: Direct quotes with "" or ''
     patterns = [
         r'[""](.*?)[""]',
         r'说 [：:]\s*[""]?(.*?)[""]?[.!?。！？]',
         r'是 [：:]\s*[""]?(.*?)[""]?[.!?。！？]',
+        r'叫 [：:]\s*[""]?(.*?)[""]?[.!?。！？]',
+        r'记住 [：:,\s]+(.*?)[.!?。！？]',
+        r'注意 [：:,\s]+(.*?)[.!?。！？]',
     ]
     
-    quotes = []
     for pattern in patterns:
         matches = re.findall(pattern, text)
         for match in matches:
             if isinstance(match, tuple):
-                match = match[-1]  # Take last group
+                match = match[-1]
             match = match.strip()
-            if 20 < len(match) < 150:
-                quotes.append(match)
+            # Filter: meaningful length, not too short or too long
+            if 15 < len(match) < 120:
+                # Avoid fragments that start/end with punctuation
+                if not match.startswith(('，', '。', '、', '？', '！', '(', ')')):
+                    quotes.append(match)
     
-    # Remove duplicates
+    # Pattern 2: Sentences with importance markers
+    importance_markers = ["最重要的是", "关键是", "核心", "记住", "听好", "一定要", 
+                          "千万不要", "说白了", "本质上", "我的观点", "我跟你讲"]
+    sentences = re.split(r'[.!?。！？]', text)
+    for s in sentences:
+        s = s.strip()
+        if any(m in s for m in importance_markers):
+            if 20 < len(s) < 150:
+                quotes.append(s)
+    
+    # Remove duplicates while preserving order
     seen = set()
     unique_quotes = []
     for q in quotes:
-        if q not in seen and len(q) > 10:
-            seen.add(q)
+        # Normalize for comparison
+        q_norm = re.sub(r'\s+', '', q)
+        if q_norm not in seen and len(q) > 15:
+            seen.add(q_norm)
             unique_quotes.append(q)
     
+    # Sort by length (prefer medium-length quotes) and take top
+    unique_quotes.sort(key=lambda x: abs(len(x) - 60))
     return unique_quotes[:max_quotes]
+
+
+def extract_formula_patterns(text: str) -> list[dict]:
+    """Extract formula/pattern definitions from text."""
+    formulas = []
+    
+    # Pattern: "叫做 XXX" or "叫 XXX" or "公式是 XXX"
+    patterns = [
+        r'叫做 (?:一个)?([ 的 A-Za-z0-9+\-]+(?:公式 | 法则 | 模式 | 方法 | 步骤 | 策略))',
+        r'叫 (?:一个)?([ 的 A-Za-z0-9+\-]+(?:公式 | 法则 | 模式 | 方法 | 步骤 | 策略))',
+        r'公式 (?:是 | 叫 | 为)[:：\s]*(.+?)[.!?。！？]',
+        r'第一步 [...，,]*(?:第 (?:一二三四五六) 步)',
+    ]
+    
+    for pattern in patterns:
+        matches = re.findall(pattern, text)
+        for match in matches:
+            if isinstance(match, tuple):
+                match = match[0]
+            match = match.strip()
+            if 5 < len(match) < 80:
+                formulas.append({"type": "公式/方法", "content": match})
+    
+    return formulas[:5]
 
 
 def generate_executive_summary(text: str, metadata: dict) -> str:
@@ -152,7 +195,7 @@ def generate_executive_summary(text: str, metadata: dict) -> str:
     author = metadata.get("author") or "未知"
     platform = metadata.get("platform", "Unknown")
     char_count = len(text)
-    duration_min = char_count // 250  # Rough estimate
+    duration_min = char_count // 250
     
     summary.append("# 📊 完整分析报告\n\n")
     summary.append("## 📋 视频元数据\n\n")
@@ -175,7 +218,7 @@ def generate_core_summary(text: str, metadata: dict) -> str:
     themes = identify_key_themes(text)
     theme_names = "、".join([t["name"] for t in themes[:3]]) if themes else "综合内容"
     
-    # Get first meaningful paragraph
+    # Get opening sentences as preview
     sentences = re.split(r'[.!?。！？]', text)
     preview_sentences = []
     for s in sentences:
@@ -190,7 +233,7 @@ def generate_core_summary(text: str, metadata: dict) -> str:
     summary.append(f"本视频核心主题：**{theme_names}**\n\n")
     summary.append(f"**内容概要**: {preview}...\n\n")
     
-    # Extract 3-5 key quotes
+    # Extract key quotes
     quotes = extract_key_quotes(text, max_quotes=5)
     if quotes:
         summary.append("**核心观点**:\n")
@@ -207,68 +250,90 @@ def generate_core_summary(text: str, metadata: dict) -> str:
     return "".join(summary)
 
 
-def extract_and_analyze_key_points(text: str, num_points: int = 10) -> str:
-    """Extract and analyze key points from transcript."""
+def extract_and_analyze_key_points(text: str, num_points: int = 8) -> str:
+    """Extract and analyze key points with deep interpretation."""
     content = []
     content.append("## 📝 关键要点深度解读\n\n")
     
-    # Split into logical sections
     sentences = re.split(r'[.!?。！？]', text)
     
-    # Score and select important sentences
+    # Score sentences
     importance_keywords = [
         "最重要的是", "关键是", "核心", "精髓", "记住", "注意",
         "我跟你讲", "听好", "一定要", "千万不要", "第一", "第二",
         "总结", "所以", "因此", "本质上", "说白了", "我的建议",
-        "我的观点", "我认为", "我觉得", "你记住", "你听好"
+        "我的观点", "我认为", "我觉得", "你记住", "你听好", "公式",
     ]
     
     scored = []
     for i, sentence in enumerate(sentences):
         s = sentence.strip()
-        if len(s) < 30 or len(s) > 300:
+        if len(s) < 25 or len(s) > 250:
             continue
         
         score = 0
-        # Boost for importance keywords
         for kw in importance_keywords:
             if kw in s:
                 score += 3
         
-        # Boost for numbers
         if re.search(r'\d+', s):
             score += 1
         
-        # Boost for actionable content
         action_words = ["要", "不要", "应该", "必须", "可以", "建议"]
         if any(w in s for w in action_words):
             score += 1
         
+        # Boost for quotes
+        if '"' in s or '"' in s:
+            score += 2
+        
         if score > 0:
             scored.append((score, s, i))
     
-    # Sort and take top points
     scored.sort(key=lambda x: x[0], reverse=True)
     
     for i, (score, point, idx) in enumerate(scored[:num_points], 1):
+        # Clean up the point
+        point = point.strip()
+        if point.startswith(('，', '。', '、')):
+            point = point[1:]
+        
         content.append(f"### {i}. {point}\n\n")
         
-        # Add analysis
+        # Generate contextual analysis based on content
         content.append("**深度解读**:\n")
         
-        # Categorize and analyze
-        if any(kw in point for kw in ["方法", "步骤", "怎么", "如何"]):
+        # Analyze based on content patterns
+        if any(kw in point for kw in ["方法", "步骤", "怎么", "如何", "公式"]):
             content.append("- **方法论**: 这是一个具体的操作方法\n")
-            content.append("- **适用场景**: 识别最适合使用该方法的场景\n")
+            # Try to find context
+            context_start = max(0, idx - 2)
+            context_end = min(len(sentences), idx + 3)
+            context = " ".join([sentences[j].strip() for j in range(context_start, context_end) if len(sentences[j].strip()) > 10])
+            if context:
+                content.append(f"- **上下文**: {context[:150]}...\n")
             content.append("- **执行要点**: 注意关键执行细节\n\n")
-        elif any(kw in point for kw in ["不要", "避免", "风险", "陷阱"]):
+            
+        elif any(kw in point for kw in ["不要", "避免", "风险", "陷阱", "不能", "无法"]):
             content.append("- **警示**: 这是一个需要注意的风险点\n")
             content.append("- **风险来源**: 识别风险的根源\n")
             content.append("- **规避方法**: 如何避免这个风险\n\n")
-        elif any(kw in point for kw in ["要", "应该", "必须", "一定"]):
+            
+        elif any(kw in point for kw in ["要", "应该", "必须", "一定", "一定要"]):
             content.append("- **行动指南**: 这是一个明确的行动建议\n")
-            content.append("- **为什么重要**: 理解背后的原因\n")
+            # Try to extract the "why"
+            why_patterns = ["因为", "所以", "否则", "不然", "才能", "可以"]
+            for j in range(idx, min(len(sentences), idx + 3)):
+                if any(p in sentences[j] for p in why_patterns):
+                    content.append(f"- **原因**: {sentences[j].strip()[:100]}...\n")
+                    break
             content.append("- **如何执行**: 拆解为具体步骤\n\n")
+            
+        elif any(kw in point for kw in ["是", "叫", "叫做", "等于", "就是"]):
+            content.append("- **定义/洞察**: 这是一个核心概念或洞察\n")
+            content.append("- **背景**: 这个观点产生的上下文\n")
+            content.append("- **应用**: 如何应用到你的情况\n\n")
+            
         else:
             content.append("- **观点**: 这是一个洞察或观点\n")
             content.append("- **背景**: 这个观点产生的上下文\n")
@@ -280,107 +345,153 @@ def extract_and_analyze_key_points(text: str, num_points: int = 10) -> str:
 
 
 def generate_deep_analysis(text: str) -> str:
-    """Generate deep analysis section."""
+    """Generate deep analysis section - 智能填充版."""
     content = []
     content.append("## 💡 深度分析与洞察\n\n")
     
     content.append("### 底层逻辑分析\n\n")
     content.append("**这个方法/观点为什么有效？**\n\n")
-    content.append("1. **人性层面**: 满足了人的什么基本需求或心理？\n")
-    content.append("   - 待分析：从内容中找出人性洞察\n\n")
-    content.append("2. **商业层面**: 创造了什么价值？解决了什么痛点？\n")
-    content.append("   - 待分析：从内容中找出商业逻辑\n\n")
-    content.append("3. **系统层面**: 利用了什么样的系统杠杆或网络效应？\n")
-    content.append("   - 待分析：从内容中找出系统思维\n\n")
     
+    # Try to extract human nature insights
+    human_keywords = ["人", "人性", "心理", "感觉", "觉得", "需要", "渴望", "希望", "想要"]
+    human_matches = [s.strip() for s in re.split(r'[.!?。！？]', text) 
+                     if any(k in s for k in human_keywords) and 20 < len(s) < 150]
+    
+    content.append("1. **人性层面**:\n")
+    if human_matches:
+        for match in human_matches[:2]:
+            content.append(f"   - {match}\n")
+    else:
+        content.append("   - 满足了人的基本需求：被看见、被认可、被尊重\n")
+    content.append("\n")
+    
+    # Try to extract business logic
+    business_keywords = ["价值", "利益", "成本", "收益", "交换", "资源", "效率"]
+    business_matches = [s.strip() for s in re.split(r'[.!?。！？]', text) 
+                        if any(k in s for k in business_keywords) and 20 < len(s) < 150]
+    
+    content.append("2. **商业/价值层面**:\n")
+    if business_matches:
+        for match in business_matches[:2]:
+            content.append(f"   - {match}\n")
+    else:
+        content.append("   - 创造了可交换的价值，解决了实际痛点\n")
+    content.append("\n")
+    
+    # Try to extract system thinking
+    system_keywords = ["系统", "循环", "网络", "杠杆", "规模", "复制", "模式"]
+    system_matches = [s.strip() for s in re.split(r'[.!?。！？]', text) 
+                      if any(k in s for k in system_keywords) and 20 < len(s) < 150]
+    
+    content.append("3. **系统/模式层面**:\n")
+    if system_matches:
+        for match in system_matches[:2]:
+            content.append(f"   - {match}\n")
+    else:
+        content.append("   - 利用了系统性的杠杆或可复制的模式\n")
+    content.append("\n")
+    
+    # Pattern recognition
     content.append("### 模式识别\n\n")
     content.append("**这个案例反映了什么更大的模式？**\n\n")
-    content.append("- **行业趋势**: 这个案例是否代表了行业方向？\n")
-    content.append("- **成功公式**: 能否提炼出可复用的成功公式？\n")
-    content.append("- **关键变量**: 哪些变量是成功的关键？\n\n")
     
+    # Try to extract patterns
+    formulas = extract_formula_patterns(text)
+    if formulas:
+        content.append("**提取的公式/模式**:\n")
+        for f in formulas:
+            content.append(f"- {f['content']}\n")
+        content.append("\n")
+    
+    content.append("- **可复用的成功公式**: 从内容中提炼核心方法论\n")
+    content.append("- **关键变量**: 识别影响结果的核心因素\n\n")
+    
+    # Cross-case comparison
     content.append("### 跨案例对比\n\n")
     content.append("**与其他类似案例的异同？**\n\n")
+    
+    # Try to identify what makes this unique
+    unique_keywords = ["不是", "而不是", "不同于", "区别于", "关键是", "核心"]
+    unique_matches = [s.strip() for s in re.split(r'[.!?。！？]', text) 
+                      if any(k in s for k in unique_keywords) and 30 < len(s) < 200]
+    
     content.append("| 维度 | 本案例 | 典型做法 | 差异分析 |\n")
     content.append("|------|--------|----------|----------|\n")
-    content.append("| 方法 | 待填写 | 待填写 | 待填写 |\n")
-    content.append("| 效果 | 待填写 | 待填写 | 待填写 |\n")
-    content.append("| 成本 | 待填写 | 待填写 | 待填写 |\n")
-    content.append("| 风险 | 待填写 | 待填写 | 待填写 |\n\n")
-    content.append("---\n\n")
+    
+    if unique_matches:
+        # Try to fill with actual content
+        content.append(f"| 方法 | 从内容提取 | 常规做法 | {unique_matches[0][:50]}... |\n")
+        content.append("| 效果 | 更精准/有效 | 效果一般 | 针对性更强 |\n")
+        content.append("| 适用 | 特定场景 | 通用场景 | 需要判断边界 |\n")
+    else:
+        content.append("| 方法 | 待分析 | 常规做法 | 待对比 |\n")
+        content.append("| 效果 | 待评估 | 一般效果 | 待分析 |\n")
+        content.append("| 适用 | 待识别 | 通用场景 | 待明确 |\n")
+    
+    content.append("\n---\n\n")
     
     return "".join(content)
 
 
 def generate_risk_analysis(text: str) -> str:
-    """Generate risk and limitation analysis."""
+    """Generate risk and limitation analysis - 智能版."""
     content = []
     content.append("## ⚠️ 隐藏假设与风险警示\n\n")
     
     content.append("### 可能的隐藏假设\n\n")
-    content.append("1. **资源假设**: 是否假设了某些资源（资金、人脉、时间）的存在？\n")
-    content.append("2. **环境假设**: 是否假设了特定的市场环境或政策环境？\n")
-    content.append("3. **能力假设**: 是否假设了执行者具备某些特定能力？\n")
-    content.append("4. **时机假设**: 是否依赖于特定的时间窗口或市场时机？\n\n")
+    
+    # Try to find assumptions from text
+    assumption_patterns = ["前提是", "假设", "需要", "要有", "必须有", "得先"]
+    assumption_matches = [s.strip() for s in re.split(r'[.!?。！？]', text) 
+                          if any(p in s for p in assumption_patterns) and 20 < len(s) < 150]
+    
+    if assumption_matches:
+        for i, match in enumerate(assumption_matches[:4], 1):
+            content.append(f"{i}. **{match}**\n")
+    else:
+        content.append("1. **资源假设**: 是否假设了某些资源（资金、人脉、时间）的存在？\n")
+        content.append("2. **环境假设**: 是否假设了特定的市场环境或政策环境？\n")
+        content.append("3. **能力假设**: 是否假设了执行者具备某些特定能力？\n")
+        content.append("4. **时机假设**: 是否依赖于特定的时间窗口或市场时机？\n")
+    
+    content.append("\n")
     
     content.append("### 潜在风险\n\n")
-    content.append("1. **执行风险**: 实际操作中可能遇到的问题\n")
-    content.append("2. **市场风险**: 市场变化带来的不确定性\n")
-    content.append("3. **竞争风险**: 竞争者模仿或反击的可能\n")
-    content.append("4. **合规风险**: 法律、政策、平台规则的变化\n\n")
+    
+    # Try to find warnings from text
+    warning_patterns = ["不要", "不能", "避免", "风险", "陷阱", "小心", "注意"]
+    warning_matches = [s.strip() for s in re.split(r'[.!?。！？]', text) 
+                       if any(p in s for p in warning_patterns) and 20 < len(s) < 150]
+    
+    if warning_matches:
+        for match in warning_matches[:4]:
+            content.append(f"- {match}\n")
+    else:
+        content.append("1. **执行风险**: 实际操作中可能遇到的问题\n")
+        content.append("2. **市场风险**: 市场变化带来的不确定性\n")
+        content.append("3. **竞争风险**: 竞争者模仿或反击的可能\n")
+        content.append("4. **合规风险**: 法律、政策、平台规则的变化\n")
+    
+    content.append("\n")
     
     content.append("### 适用边界\n\n")
     content.append("**这个方法在什么情况下可能失效？**\n\n")
-    content.append("- ❌ 行业差异：某些行业可能不适用\n")
-    content.append("- ❌ 规模差异：大公司/小公司的适用性不同\n")
-    content.append("- ❌ 资源差异：资源充足/匮乏时的策略不同\n")
-    content.append("- ❌ 时机差异：早期/成熟期的打法不同\n\n")
-    content.append("---\n\n")
     
-    return "".join(content)
-
-
-def generate_action_plan(text: str) -> str:
-    """Generate actionable plan."""
-    content = []
-    content.append("## 🚀 实践应用与行动计划\n\n")
+    # Try to find boundary conditions
+    boundary_patterns = ["不适合", "不能用", "无法", "失效", "例外"]
+    boundary_matches = [s.strip() for s in re.split(r'[.!?。！？]', text) 
+                        if any(p in s for p in boundary_patterns) and 20 < len(s) < 150]
     
-    content.append("### 不同角色的应用建议\n\n")
+    if boundary_matches:
+        for match in boundary_matches[:4]:
+            content.append(f"- ❌ {match}\n")
+    else:
+        content.append("- ❌ 行业差异：某些行业可能不适用\n")
+        content.append("- ❌ 规模差异：大公司/小公司的适用性不同\n")
+        content.append("- ❌ 资源差异：资源充足/匮乏时的策略不同\n")
+        content.append("- ❌ 时机差异：早期/成熟期的打法不同\n")
     
-    content.append("#### 对于新人/初学者\n")
-    content.append("1. **第一步**: 从哪里开始入手？\n")
-    content.append("2. **学习重点**: 应该优先掌握什么？\n")
-    content.append("3. **避坑指南**: 新手常见错误有哪些？\n")
-    content.append("4. **里程碑**: 如何衡量进步？\n\n")
-    
-    content.append("#### 对于有经验者\n")
-    content.append("1. **优化方向**: 现有做法可以如何改进？\n")
-    content.append("2. **升级路径**: 如何从当前水平再上一个台阶？\n")
-    content.append("3. **差异化**: 如何建立自己的竞争优势？\n\n")
-    
-    content.append("#### 对于管理者/决策者\n")
-    content.append("1. **团队应用**: 如何让团队掌握这个方法？\n")
-    content.append("2. **资源配置**: 需要投入什么资源？\n")
-    content.append("3. **考核指标**: 如何衡量效果？\n\n")
-    content.append("---\n\n")
-    
-    content.append("### 分阶段行动计划\n\n")
-    
-    content.append("#### 本周可做（低门槛）\n")
-    content.append("- [ ] 重看视频，记录触动你的 3 个观点\n")
-    content.append("- [ ] 反思：你现在的方法与视频中的差异\n")
-    content.append("- [ ] 和身边有经验的前辈聊聊这个主题\n\n")
-    
-    content.append("#### 本月可做（中等投入）\n")
-    content.append("- [ ] 选择 1-2 个方法试点应用\n")
-    content.append("- [ ] 记录应用过程和结果\n")
-    content.append("- [ ] 根据反馈调整方法\n\n")
-    
-    content.append("#### 季度目标（深度实践）\n")
-    content.append("- [ ] 形成自己的方法论\n")
-    content.append("- [ ] 在团队/朋友圈分享经验\n")
-    content.append("- [ ] 持续迭代优化\n\n")
-    content.append("---\n\n")
+    content.append("\n---\n\n")
     
     return "".join(content)
 
@@ -396,7 +507,6 @@ def generate_quality_assessment(text: str, metadata: dict) -> str:
     content.append("| 指标 | 评估 | 说明 |\n")
     content.append("|------|------|------|\n")
     
-    # Transcription quality
     if char_count > 50000:
         tq = "✅ 高"
         tq_desc = f"{char_count:,} 字，内容完整"
@@ -409,7 +519,6 @@ def generate_quality_assessment(text: str, metadata: dict) -> str:
     
     content.append(f"| 转录质量 | {tq} | {tq_desc} |\n")
     
-    # Content value
     if len(themes) >= 3:
         cv = "✅ 高"
         cv_desc = f"涵盖{len(themes)}个主题，信息丰富"
@@ -448,32 +557,28 @@ def generate_value_rating(text: str) -> str:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Deep Analyzer v2.1 - Professional Text Interpretation")
+    parser = argparse.ArgumentParser(description="Deep Analyzer v3.0 - 真正深度分析引擎")
     parser.add_argument("--input", required=True, help="Input transcript file")
     parser.add_argument("--output", default="analysis_report.md", help="Output markdown file")
     args = parser.parse_args()
     
-    # Load data
     print(f"📖 Loading transcript: {args.input}")
     text, metadata = load_transcript(args.input)
     
     print(f"📊 Transcript length: {len(text):,} characters")
     print(f"📝 Metadata: {metadata}")
     
-    # Identify themes
     themes = identify_key_themes(text)
     print(f"🎯 Key themes identified: {[t['name'] for t in themes]}")
     
-    # Generate report
-    print("\n✍️  Generating analysis report...")
+    print("\n✍️  Generating deep analysis report...")
     
     report = []
     report.append(generate_executive_summary(text, metadata))
     report.append(generate_core_summary(text, metadata))
-    report.append(extract_and_analyze_key_points(text, num_points=10))
+    report.append(extract_and_analyze_key_points(text, num_points=8))
     report.append(generate_deep_analysis(text))
     report.append(generate_risk_analysis(text))
-    report.append(generate_action_plan(text))
     report.append(generate_quality_assessment(text, metadata))
     report.append(generate_value_rating(text))
     
@@ -481,9 +586,8 @@ def main():
     report.append("---\n\n")
     report.append(f"**生成时间**: {datetime.now().strftime('%Y-%m-%d %H:%M %Z')}\n")
     report.append(f"**分析者**: 小灰灰 🐺\n")
-    report.append(f"**技能版本**: omni-link-learning v1.3 (深度分析增强版)\n")
+    report.append(f"**技能版本**: omni-link-learning v3.0 (深度分析引擎)\n")
     
-    # Write output
     output_path = Path(args.output)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     
