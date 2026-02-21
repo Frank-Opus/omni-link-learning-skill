@@ -583,6 +583,108 @@ def find_fw_transcribe_runner() -> str | None:
     return None
 
 
+def try_mcp_download(source_url: str, outdir: Path) -> dict:
+    """Try to download Douyin/Xiaohongshu video using MCP (Model Context Protocol)."""
+    result: dict[str, object] = {
+        "mcp_used": False,
+        "download_url": None,
+        "audio_path": None,
+        "video_info": None,
+        "note": "",
+    }
+    
+    platform = detect_platform(source_url)
+    if platform not in {"douyin", "xiaohongshu"}:
+        result["note"] = "MCP download only supports Douyin and Xiaohongshu."
+        return result
+    
+    # Try to import MCP module
+    try:
+        from douyin_mcp_server.server import parse_douyin_link, parse_xhs_link
+        result["mcp_used"] = True
+    except ImportError:
+        result["note"] = "MCP module not found. Install with: pip install douyin-mcp-server"
+        return result
+    
+    # Load config for API key
+    config_path = Path.home() / ".openclaw" / "skills" / "omni-link-learning" / "config.json"
+    api_key = None
+    if config_path.exists():
+        try:
+            with open(config_path, "r", encoding="utf-8") as f:
+                config = json.load(f)
+                api_key = config.get("api_key")
+        except Exception:
+            pass
+    
+    # Set API key as environment variable
+    if api_key:
+        os.environ["DASHSCOPE_API_KEY"] = api_key
+    
+    try:
+        # Parse video info and get download link
+        if platform == "douyin":
+            result_str = parse_douyin_link(source_url)
+        else:  # xiaohongshu
+            result_str = parse_xhs_link(source_url)
+        
+        mcp_result = json.loads(result_str) if isinstance(result_str, str) else result_str
+        result["video_info"] = mcp_result
+        
+        if isinstance(mcp_result, dict) and mcp_result.get("status") == "success":
+            # Get download URL - check multiple field names
+            download_url = (
+                mcp_result.get("download_url") or 
+                mcp_result.get("video_url") or 
+                mcp_result.get("url") or 
+                mcp_result.get("play_url")
+            )
+            
+            if download_url:
+                result["download_url"] = download_url
+                result["note"] = "MCP successfully obtained download link"
+                
+                # Download audio using yt-dlp
+                yt_dlp = shutil.which("yt-dlp")
+                if yt_dlp:
+                    audio_pattern = outdir / "mcp_audio.%(ext)s"
+                    dl_cmd = [
+                        yt_dlp,
+                        "-x",
+                        "--audio-format",
+                        "mp3",
+                        "--audio-quality",
+                        "0",
+                        "--no-playlist",
+                        "-o",
+                        str(audio_pattern),
+                        download_url,
+                    ]
+                    
+                    dl = subprocess.run(dl_cmd, capture_output=True, text=True, check=False)
+                    if dl.returncode == 0:
+                        audio_files = sorted(outdir.glob("mcp_audio.*"), key=lambda p: p.stat().st_mtime, reverse=True)
+                        if audio_files:
+                            result["audio_path"] = str(audio_files[0])
+                            result["note"] = "MCP download + audio extraction successful"
+                        else:
+                            result["note"] = "Download completed but audio file not found"
+                    else:
+                        result["note"] = f"Audio extraction failed: {dl.stderr[-300:]}"
+            else:
+                result["note"] = "MCP returned success but no download URL found"
+        else:
+            error_msg = mcp_result.get("error", "Unknown error") if isinstance(mcp_result, dict) else "Unknown error"
+            result["note"] = f"MCP failed: {error_msg}"
+    
+    except Exception as exc:  # noqa: BLE001
+        result["note"] = f"MCP exception: {exc}"
+        import traceback
+        result["traceback"] = traceback.format_exc()
+    
+    return result
+
+
 def try_asr_fallback(
     source_url: str,
     outdir: Path,
@@ -617,61 +719,180 @@ def try_asr_fallback(
 
     result["asr_runner"] = runner
 
-    # Try multiple URL formats for Douyin (anti-scraping workaround)
-    urls_to_try = [source_url]
+    # For Douyin/Xiaohongshu, try MCP download first
     platform = detect_platform(source_url)
-    
-    if platform == "douyin":
-        video_id = extract_douyin_video_id(source_url)
-        if video_id:
-            # Try different Douyin URL formats
-            urls_to_try = [
-                source_url,  # Original URL
-                f"https://www.douyin.com/video/{video_id}",  # Desktop format
-                f"https://m.douyin.com/share/video/{video_id}",  # Mobile format
-                f"https://iesdouyin.com/share/video/{video_id}",  # Alternative domain
-            ]
-            result["download_attempts"] = urls_to_try
-
-    audio_pattern = outdir / "asr_audio.%(ext)s"
-    dl_success = False
-    last_error = None
-    
-    for attempt_url in urls_to_try:
-        result["download_attempts"].append(f"Trying: {attempt_url}")
-        
-        dl_cmd = [
-            yt_dlp,
-            "-x",
-            "--audio-format",
-            "mp3",
-            "--audio-quality",
-            "0",
-            "--no-playlist",
-            "--no-warnings",
-            "-o",
-            str(audio_pattern),
-            attempt_url,
-        ]
-        
-        # Add cookies for Douyin if available
-        if platform == "douyin":
-            # Try to use browser cookies if available
-            dl_cmd.extend(["--cookies-from-browser", "chrome"])
-        
-        dl = subprocess.run(dl_cmd, capture_output=True, text=True, check=False)
-        
-        if dl.returncode == 0:
-            dl_success = True
-            result["download_attempts"].append(f"Success with: {attempt_url}")
-            break
+    if platform in {"douyin", "xiaohongshu"}:
+        mcp_result = try_mcp_download(source_url, outdir)
+        if mcp_result.get("audio_path"):
+            result["audio_path"] = mcp_result["audio_path"]
+            result["video_info"] = mcp_result.get("video_info")
+            result["download_attempts"].append(f"MCP download successful: {mcp_result['audio_path']}")
+            result["asr_used"] = True  # Mark as we have audio, proceed to ASR
+            
+            # Continue to ASR transcription with the downloaded audio
+            audio_path = mcp_result["audio_path"]
         else:
-            last_error = dl.stderr[-500:] if dl.stderr else "Unknown error"
-            result["download_attempts"].append(f"Failed: {attempt_url} - {last_error[:200]}")
-    
-    if not dl_success:
-        result["note"] = f"ASR fallback failed to download audio after {len(urls_to_try)} attempts: {last_error}"
+            result["download_attempts"].append(f"MCP download failed: {mcp_result.get('note', 'Unknown')}")
+            # Fall back to direct yt-dlp attempt
+            audio_path = None
+    else:
+        # Non-Douyin/Xiaohongshu platforms, use original logic
+        audio_path = None
+
+    # If MCP didn't provide audio, try direct yt-dlp
+    if not audio_path:
+        # Try multiple URL formats for Douyin (anti-scraping workaround)
+        urls_to_try = [source_url]
+        
+        if platform == "douyin":
+            video_id = extract_douyin_video_id(source_url)
+            if video_id:
+                # Try different Douyin URL formats
+                urls_to_try = [
+                    source_url,  # Original URL
+                    f"https://www.douyin.com/video/{video_id}",  # Desktop format
+                    f"https://m.douyin.com/share/video/{video_id}",  # Mobile format
+                    f"https://iesdouyin.com/share/video/{video_id}",  # Alternative domain
+                ]
+                result["download_attempts"] = urls_to_try
+
+        audio_pattern = outdir / "asr_audio.%(ext)s"
+        dl_success = False
+        last_error = None
+        
+        for attempt_url in urls_to_try:
+            result["download_attempts"].append(f"Trying: {attempt_url}")
+            
+            dl_cmd = [
+                yt_dlp,
+                "-x",
+                "--audio-format",
+                "mp3",
+                "--audio-quality",
+                "0",
+                "--no-playlist",
+                "--no-warnings",
+                "-o",
+                str(audio_pattern),
+                attempt_url,
+            ]
+            
+            # Add cookies for Douyin if available
+            if platform == "douyin":
+                # Try to use browser cookies if available
+                dl_cmd.extend(["--cookies-from-browser", "chrome"])
+            
+            dl = subprocess.run(dl_cmd, capture_output=True, text=True, check=False)
+            
+            if dl.returncode == 0:
+                dl_success = True
+                result["download_attempts"].append(f"Success with: {attempt_url}")
+                break
+            else:
+                last_error = dl.stderr[-500:] if dl.stderr else "Unknown error"
+                result["download_attempts"].append(f"Failed: {attempt_url} - {last_error[:200]}")
+        
+        if not dl_success:
+            result["note"] = f"ASR fallback failed to download audio after {len(urls_to_try)} attempts: {last_error}"
+            return result
+        
+        audio_path = str(audio_pattern)
+        # Find the actual file
+        audio_files = sorted(outdir.glob("asr_audio.*"), key=lambda p: p.stat().st_mtime, reverse=True)
+        if audio_files:
+            audio_path = str(audio_files[0])
+        else:
+            result["note"] = "Download completed but audio file not found"
+            return result
+
+    # Proceed to ASR transcription
+    asr_json_path = outdir / "transcript_asr.json"
+    asr_cmd = [
+        runner,
+        audio_path,
+        "--model",
+        model,
+        "--beam-size",
+        str(beam_size),
+        "--vad",
+        "-j",
+        "-o",
+        str(asr_json_path),
+    ]
+    if language:
+        asr_cmd.extend(["--language", language])
+
+    asr = subprocess.run(asr_cmd, capture_output=True, text=True, check=False)
+    if asr.returncode != 0:
+        result["note"] = f"ASR fallback failed during transcription: {asr.stderr[-600:]}"
         return result
+
+    if not asr_json_path.exists():
+        result["note"] = "ASR fallback failed: transcript_asr.json not created."
+        return result
+
+    result["asr_json"] = str(asr_json_path)
+
+    try:
+        obj = json.loads(asr_json_path.read_text(encoding="utf-8", errors="replace"))
+    except Exception as exc:  # noqa: BLE001
+        result["note"] = f"ASR fallback failed: invalid JSON output ({exc})."
+        return result
+
+    text = (obj.get("text") or "").strip()
+    if not text:
+        result["note"] = "ASR fallback completed but transcript text is empty."
+        return result
+
+    cjk_count = len(re.findall(r"[\u4e00-\u9fff]", text))
+    text_len = len(text)
+    cjk_ratio = round(cjk_count / max(1, text_len), 4)
+    result["quality"] = {
+        "text_length": text_len,
+        "cjk_ratio": cjk_ratio,
+        "language": obj.get("language"),
+        "language_probability": obj.get("language_probability"),
+    }
+
+    transcript_path = outdir / "transcript.txt"
+    transcript_path.write_text(text, encoding="utf-8")
+    result["transcript_path"] = str(transcript_path)
+    result["asr_used"] = True
+
+    # Enhanced quality assessment
+    quality_assessment = "high"
+    quality_notes = []
+    
+    if language.lower().startswith("zh"):
+        if cjk_ratio < 0.05:
+            quality_assessment = "low"
+            quality_notes.append(f"Very low CJK ratio ({cjk_ratio}), may indicate poor ASR quality")
+            result["note"] = (
+                f"ASR transcript quality is LOW for zh (cjk_ratio={cjk_ratio}). "
+                "Recommend re-running with --asr-model large-v3 or checking audio quality."
+            )
+        elif cjk_ratio < 0.08:
+            quality_assessment = "medium"
+            quality_notes.append(f"Moderate CJK ratio ({cjk_ratio}), acceptable but not optimal")
+            if not result["note"]:
+                result["note"] = (
+                    f"ASR transcript quality is MEDIUM for zh (cjk_ratio={cjk_ratio}). "
+                    "Consider re-running with --asr-model large-v3-turbo for better accuracy."
+                )
+        else:
+            quality_notes.append(f"Good CJK ratio ({cjk_ratio}), high confidence")
+    
+    # Add language detection confidence
+    lang_prob = obj.get("language_probability", 0)
+    if lang_prob < 0.7:
+        quality_notes.append(f"Low language detection confidence ({lang_prob:.2f})")
+        if quality_assessment == "high":
+            quality_assessment = "medium"
+    
+    result["quality"]["assessment"] = quality_assessment
+    result["quality"]["notes"] = quality_notes
+
+    return result
     if dl.returncode != 0:
         result["note"] = f"ASR fallback failed to download audio: {dl.stderr[-600:]}"
         return result
@@ -837,6 +1058,7 @@ def main() -> int:
             source_text = None
             read_url = f"https://r.jina.ai/{normalized_source}"
             last_error = None
+            jina_success = False
             
             for attempt in range(max(1, args.retry + 1)):
                 try:
@@ -847,6 +1069,7 @@ def main() -> int:
                     
                     source_text = http_get_text(read_url, platform_timeout)
                     if source_text and len(source_text) > 50:
+                        jina_success = True
                         break  # Success
                     elif not source_text:
                         last_error = Exception("Empty response")
@@ -855,15 +1078,19 @@ def main() -> int:
                     manifest["notes"].append(f"Attempt {attempt + 1} failed: {exc}")
                     continue
             
-            if not source_text:
+            # For Douyin/Xiaohongshu, Jina failure is OK if we have ASR fallback
+            if jina_success:
+                read_path = outdir / "source_read.md"
+                read_path.write_text(source_text, encoding="utf-8")
+                manifest["files"]["source_read"] = str(read_path)
+                manifest["files"]["read_via"] = read_url
+            elif platform in {"douyin", "xiaohongshu"} and args.asr_fallback:
+                manifest["notes"].append("Jina Reader failed, but will proceed with MCP + ASR fallback for audio transcription")
+            else:
                 raise Exception(f"Failed to fetch content after {args.retry + 1} attempts: {last_error}")
-            
-            read_path = outdir / "source_read.md"
-            read_path.write_text(source_text, encoding="utf-8")
-            manifest["files"]["source_read"] = str(read_path)
-            manifest["files"]["read_via"] = read_url
 
             # Platform-specific metadata extraction
+            # For Douyin/Xiaohongshu, try MCP first (works even if Jina failed)
             if platform == "bilibili":
                 bilibili_meta = fetch_bilibili_metadata(normalized_source, args.timeout)
                 bilibili_meta_path = outdir / "bilibili_meta.json"
@@ -879,13 +1106,43 @@ def main() -> int:
                     )
             
             elif platform == "douyin":
-                douyin_meta = fetch_douyin_metadata(normalized_source, args.timeout)
-                douyin_meta_path = outdir / "douyin_meta.json"
-                douyin_meta_path.write_text(
-                    json.dumps(douyin_meta, indent=2, ensure_ascii=False),
-                    encoding="utf-8",
-                )
-                manifest["files"]["platform_meta"] = str(douyin_meta_path)
+                # Try MCP for metadata (works independently of Jina)
+                if args.asr_fallback:
+                    mcp_meta = try_mcp_download(normalized_source, outdir)
+                    if mcp_meta.get("video_info"):
+                        # Use MCP video info as metadata
+                        douyin_meta = {
+                            "canonical_url": normalized_source,
+                            "video_id": extract_douyin_video_id(normalized_source),
+                            "title": mcp_meta["video_info"].get("caption", "Unknown"),
+                            "author": mcp_meta["video_info"].get("author"),
+                            "source": "MCP",
+                        }
+                        douyin_meta_path = outdir / "douyin_meta.json"
+                        douyin_meta_path.write_text(
+                            json.dumps(douyin_meta, indent=2, ensure_ascii=False),
+                            encoding="utf-8",
+                        )
+                        manifest["files"]["platform_meta"] = str(douyin_meta_path)
+                        manifest["notes"].append("Douyin metadata from MCP")
+                    else:
+                        # Fallback to Jina-based metadata
+                        douyin_meta = fetch_douyin_metadata(normalized_source, args.timeout)
+                        douyin_meta_path = outdir / "douyin_meta.json"
+                        douyin_meta_path.write_text(
+                            json.dumps(douyin_meta, indent=2, ensure_ascii=False),
+                            encoding="utf-8",
+                        )
+                        manifest["files"]["platform_meta"] = str(douyin_meta_path)
+                else:
+                    douyin_meta = fetch_douyin_metadata(normalized_source, args.timeout)
+                    douyin_meta_path = outdir / "douyin_meta.json"
+                    douyin_meta_path.write_text(
+                        json.dumps(douyin_meta, indent=2, ensure_ascii=False),
+                        encoding="utf-8",
+                    )
+                    manifest["files"]["platform_meta"] = str(douyin_meta_path)
+                
                 if douyin_meta.get("errors"):
                     manifest["notes"].append(
                         "Douyin metadata had partial errors: "
