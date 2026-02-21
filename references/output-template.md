@@ -1,28 +1,240 @@
-# Output Template
+# Omni Link Learning Output Template
 
-## A. Quick Brief
+## A. Quick Brief (30-second read)
 
-1. **3-line gist**
-2. **Most important points (5-8 bullets)**
-3. **Why it matters (3 bullets)**
+### 核心摘要 (3-line gist)
+[用 3 句话概括核心内容]
 
-## B. Deep Understanding
+### 关键要点 (5-8 most important points)
+1. [要点 1]
+2. [要点 2]
+3. [要点 3]
+4. [要点 4]
+5. [要点 5]
+6. [要点 6]
+7. [要点 7]
+8. [要点 8]
 
-1. **Core thesis**  
-2. **Logic chain** (claim -> evidence -> conclusion)  
-3. **Key concepts/terms**  
-4. **Assumptions and caveats**  
-5. **Actionable takeaways**  
+### 为什么重要 (3 "why this matters" bullets)
+- 💡 [对行业的意义]
+- 🎯 [对创业者的启示]
+- 🚀 [行动机会]
 
-## C. Distributed Learning Plan
+---
 
-1. Session plan (S1, S2, S3...) with objective and output
-2. Retrieval questions per session
-3. Spaced review checkpoints (D1, D3, D7)
+## B. Deep Understanding (5-minute read)
 
-## D. Comprehension Check
+### 核心论点 (Core Thesis)
+[用 200-300 字阐述核心论点]
 
-1. 5 diagnostic questions (basic -> transfer)
-2. Teach-back task (explain in your own words)
-3. One practical application task
+### 证据与逻辑链 (Evidence and Logic Chain)
+1. **前提假设**: [列出关键假设]
+2. **数据支撑**: [引用具体数据/案例]
+3. **逻辑推导**: [从前提 to 结论的推理过程]
+4. **反例处理**: [如何处理反面证据]
 
+### 关键术语/概念 (Key Terms/Concepts)
+| 术语 | 解释 | 应用场景 |
+|------|------|----------|
+| [术语 1] | [解释] | [场景] |
+| [术语 2] | [解释] | [场景] |
+| [术语 3] | [解释] | [场景] |
+
+### 隐藏假设与风险 (Hidden Assumptions and Risks)
+**隐藏假设**:
+- [假设 1]: 如果这个假设不成立，结论会如何变化？
+- [假设 2]: 这个假设在当前环境下是否合理？
+
+**风险因素**:
+- ⚠️ [风险 1]: [影响程度 高/中/低] + [应对策略]
+- ⚠️ [风险 2]: [影响程度 高/中/低] + [应对策略]
+
+### 实践应用 (What to Apply in Practice)
+**立即行动** (本周可做):
+- [ ] [行动 1]
+- [ ] [行动 2]
+
+**中期规划** (1-3 个月):
+- [ ] [行动 3]
+- [ ] [行动 4]
+
+**长期战略** (6-12 个月):
+- [ ] [行动 5]
+
+---
+
+## C. Strategic Insights (for Entrepreneurs) 🎯
+
+### 战略启示 (Strategic Implications)
+**对你的创业项目的启示**:
+1. [启示 1]: [具体如何应用]
+2. [启示 2]: [具体如何应用]
+3. [启示 3]: [具体如何应用]
+
+### 竞争格局 (Competitive Landscape)
+**现有玩家**:
+- [公司/产品 1]: [优势] + [劣势]
+- [公司/产品 2]: [优势] + [劣势]
+
+**市场机会**:
+- 🎯 [机会 1]: [为什么是机会] + [窗口期]
+- 🎯 [机会 2]: [为什么是机会] + [窗口期]
+
+**威胁因素**:
+- ⚠️ [威胁 1]: [如何应对]
+- ⚠️ [威胁 2]: [如何应对]
+
+### 创业者行动清单 (Action Items for Founders)
+**本周行动** (立即执行):
+- [ ] [行动 1]: [预期结果]
+- [ ] [行动 2]: [预期结果]
+
+**本月行动** (战略规划):
+- [ ] [行动 3]: [预期结果]
+- [ ] [行动 4]: [预期结果]
+
+**本季度行动** (资源投入):
+- [ ] [行动 5]: [预期结果]
+- [ ] [行动 6]: [预期结果]
+
+---
+
+## D. Distributed Learning Plan (参考)
+
+### 学习路径概览
+**总时长**: [X] 小时 | **建议周期**: [X] 天
+
+| 阶段 | 主题 | 时长 | 目标 | 检查点 |
+|------|------|------|------|--------|
+| Session 1 | [主题 1] | [X]min | [目标] | D1 复习 |
+| Session 2 | [主题 2] | [X]min | [目标] | D3 复习 |
+| Session 3 | [主题 3] | [X]min | [目标] | D7 复习 |
+| ... | ... | ... | ... | ... |
+
+### Session-by-Session Details
+
+#### Session 1: [主题名称]
+**学习目标**: [具体目标]
+**核心内容**: 
+- [关键点 1]
+- [关键点 2]
+
+**检索问题**:
+1. [问题 1]
+2. [问题 2]
+
+**小测验**:
+- [选择题/简答题]
+
+**复习检查点**: D1 (24 小时后)
+
+---
+
+#### Session 2: [主题名称]
+[同上结构]
+
+---
+
+### 复习计划 (Spaced Repetition)
+- **D1**: 复习 Session 1 (5 min)
+- **D3**: 复习 Session 1-2 (10 min)
+- **D7**: 复习 Session 1-3 (15 min)
+- **D14**: 总复习 + 实践应用 (30 min)
+
+---
+
+## E. Comprehension Check
+
+### 诊断问题 (5 Diagnostic Questions)
+
+**Level 1: 基础理解**
+1. [问题 1]: [考察核心概念理解]
+
+**Level 2: 应用分析**
+2. [问题 2]: [考察应用能力]
+3. [问题 3]: [考察分析能力]
+
+**Level 3: 综合评估**
+4. [问题 4]: [考察综合能力]
+5. [问题 5]: [考察批判性思维]
+
+### 教学任务 (Teach-Back Task)
+**任务**: 用 3 分钟向一个外行解释 [核心概念]
+
+**评估标准**:
+- ✅ 准确使用关键术语
+- ✅ 逻辑清晰
+- ✅ 能用类比/例子说明
+- ✅ 能回答 follow-up 问题
+
+### 行动任务 (Action Task)
+**任务**: 将 [某个概念/方法] 应用到你的实际场景中
+
+**具体要求**:
+1. 描述你的应用场景
+2. 列出实施步骤
+3. 预测可能的问题
+4. 制定应对方案
+
+**提交格式**: [文字/语音/视频]
+
+### 战略反思 (Strategic Reflection) 🎯
+**问题**: 这个内容如何改变你的创业策略？
+
+**引导问题**:
+- 你之前的假设是什么？现在需要如何调整？
+- 你发现了什么新机会？
+- 你需要放弃什么旧想法？
+- 你下周会做什么不同的事？
+
+---
+
+## F. Quality Metrics (技术信息)
+
+### 内容获取质量
+- **来源**: [平台 + URL]
+- **获取方式**: [字幕/ASR/网页抓取]
+- **完整度**: [高/中/低] + [说明]
+
+### ASR 质量指标 (如使用)
+- **模型**: [e.g., large-v3-turbo]
+- **语言**: [检测到的语言]
+- **置信度**: [language_probability]
+- **CJK 比例**: [cjk_ratio] (中文内容应>0.08)
+- **质量评估**: [high/medium/low]
+- **处理时间**: [X] 分钟
+- **GPU 加速**: [是/否 + GPU 型号]
+
+### 转写统计
+- **总字符数**: [X]
+- **总字数**: [X]
+- **时长**: [如果是视频/音频]
+- **章节数**: [如果有]
+
+---
+
+## G. Metadata
+
+**分析日期**: YYYY-MM-DD  
+**内容来源**: [平台] - [标题]  
+**原始链接**: [URL]  
+**处理版本**: omni-link-learning v2.0  
+**生成时间**: [耗时]
+
+---
+
+## 使用说明
+
+1. **快速浏览**: 只读 Section A (30 秒)
+2. **深入理解**: 阅读 Section A + B (5 分钟)
+3. **创业者必看**: Section A + B + C (7 分钟)
+4. **系统学习**: 完整阅读 + 执行 Section D (分阶段)
+5. **检验成果**: 完成 Section E
+
+**建议学习流程**:
+```
+Day 1: Section A + B (理解)
+Day 2: Section C (战略思考)
+Day 3-7: Section D (分阶段学习)
+Day 7: Section E (检验) + 实践应用
+```

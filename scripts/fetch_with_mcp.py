@@ -297,12 +297,52 @@ def main() -> int:
         print(f"✓ Transcript: {len(result['transcript'])} characters")
         print(f"   File: {result['transcript_path']}")
 
+    # Auto-generate deep analysis if transcript exists
+    if result.get("transcript") and result.get("transcript_path"):
+        print("\n🤖 Generating deep analysis report...")
+        try:
+            from deep_analyzer import main as analyze_main
+            analysis_output = outdir / "analysis_report.md"
+            
+            # Run deep analyzer
+            analyze_args = argparse.Namespace(
+                input=result['transcript_path'],
+                output=str(analysis_output)
+            )
+            
+            # Import and run
+            import deep_analyzer
+            deep_analyzer.main = lambda: analyze_main()
+            
+            # Simpler approach: call as subprocess
+            import subprocess
+            analyzer_script = outdir.parent / "scripts" / "deep_analyzer.py"
+            if analyzer_script.exists():
+                cmd = [
+                    sys.executable,
+                    str(analyzer_script),
+                    "--input", result['transcript_path'],
+                    "--output", str(analysis_output)
+                ]
+                proc = subprocess.run(cmd, capture_output=True, text=True, check=False)
+                
+                if proc.returncode == 0:
+                    print(f"✓ Analysis report generated: {analysis_output}")
+                    print(f"   Size: {analysis_output.stat().st_size:,} bytes")
+                else:
+                    print(f"⚠️  Analysis generation failed: {proc.stderr[-200:]}")
+            else:
+                print(f"⚠️  Deep analyzer script not found: {analyzer_script}")
+                
+        except Exception as exc:
+            print(f"⚠️  Analysis generation error: {exc}")
+
     # Next steps
     if result.get("transcript"):
         print("\n🎉 Complete! Next you can:")
-        print("   1. Run plan_study.py to generate study plan")
-        print("   2. Run deep analysis")
-        print("   3. Generate action items")
+        print("   1. Review analysis_report.md for detailed analysis")
+        print("   2. Run plan_study.py to generate study plan")
+        print("   3. Share insights with your team")
 
     return 0
 

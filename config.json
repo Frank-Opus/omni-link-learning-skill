@@ -1,0 +1,10 @@
+{
+  "api_key": "sk-5dfc6003254a4482ac99f3a6989d76fe",
+  "model": "paraformer-v2",
+  "language_hints": ["zh", "en"],
+  "temp_dir": "/home/ericjiang0318/.openclaw/skills/omni-link-learning/temp",
+  "use_local_asr": true,
+  "local_asr_model": "large-v3-turbo",
+  "local_asr_device": "cuda",
+  "local_asr_language": "zh"
+}
