@@ -1,3 +1,14 @@
 .DS_Store
 __pycache__/
 *.pyc
+
+# Output directories
+omni_learning_output/
+omni_output/
+omni_output_xhs/
+omni_xhs_output/
+*.mp4
+*.mp3
+*.txt
+*.md
+*.json
