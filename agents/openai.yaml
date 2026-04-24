@@ -1,0 +1,4 @@
+interface:
+  display_name: "Omni Link Learning"
+  short_description: "Ingest links and build staged learning for full understanding"
+  default_prompt: "Input one link or topic name. Read all available content, summarize essentials first, then guide staged learning until deep understanding."
